@@ -1,0 +1,174 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PrestigeGold | Administración</title>
+  <style>
+    body{margin:0;background:#090909;color:#f5d778;font-family:Arial,sans-serif;padding:20px}
+    main{max-width:650px;margin:30px auto}
+    h1{color:#d4af37}
+    section{background:#151515;border:1px solid #8d7025;border-radius:12px;padding:20px;margin:16px 0}
+    input,select,textarea,button{box-sizing:border-box;width:100%;padding:12px;margin:7px 0;border-radius:7px}
+    input,select,textarea{background:#222;color:white;border:1px solid #555}
+    button{background:#d4af37;color:#111;border:0;font-weight:bold}
+    .hidden{display:none}
+    #estado{white-space:pre-wrap;color:#fff}
+  </style>
+</head>
+<body>
+<main>
+  <h1>PrestigeGold</h1>
+  <p>Panel de administración</p>
+
+  <section id="login">
+    <h2>Iniciar sesión</h2>
+    <input id="correo" type="email" placeholder="Correo del administrador" autocomplete="username">
+    <input id="clave" type="password" placeholder="Contraseña" autocomplete="current-password">
+    <button id="entrar">Ingresar</button>
+  </section>
+
+  <section id="panel" class="hidden">
+    <p id="sesion"></p>
+    <button id="salir">Cerrar sesión</button>
+    <h2>Agregar producto</h2>
+    <form id="formProducto">
+      <label>Nombre</label>
+      <input id="nombre" required>
+      <label>Categoría</label>
+      <select id="categoria">
+        <option>Relojes</option>
+        <option>Joyas</option>
+      </select>
+      <label>Descripción</label>
+      <textarea id="descripcion"></textarea>
+      <label>Precio (ARS)</label>
+      <input id="precio" type="number" min="0" step="0.01" required>
+      <label>Enlace de la imagen</label>
+      <input id="imagenUrl" type="url" placeholder="https://...">
+      <label>¿Publicar en la tienda?</label>
+      <select id="activo">
+        <option value="true">Sí</option>
+        <option value="false">No, guardar oculto</option>
+      </select>
+      <button type="submit">Guardar producto</button>
+    </form>
+    <h2>Productos existentes</h2>
+    <div id="productos"></div>
+  </section>
+  <p id="estado" role="status"></p>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
+import {
+  getFirestore, collection, addDoc, getDocs, query, orderBy, updateDoc, doc
+} from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyANbbIDDDXYYtehsDKbsYN7Miekc-trEvk",
+  authDomain: "prestigegold-d5b18.firebaseapp.com",
+  projectId: "prestigegold-d5b18",
+  storageBucket: "prestigegold-d5b18.firebasestorage.app",
+  messagingSenderId: "483528037712",
+  appId: "1:483528037712:web:c402d74fae70e7517f8855"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const ADMIN_UID = "73ylxXiaKce2JSyI0ozZCMSVhfb2";
+
+const $ = id => document.getElementById(id);
+const estado = mensaje => $("estado").textContent = mensaje;
+
+$("entrar").addEventListener("click", async () => {
+  estado("");
+  try {
+    await signInWithEmailAndPassword(auth, $("correo").value.trim(), $("clave").value);
+  } catch (e) {
+    estado("No se pudo iniciar sesión. Revisá el correo y la contraseña.");
+  }
+});
+
+$("salir").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, async user => {
+  const esAdmin = !!user && user.uid === ADMIN_UID;
+  $("login").classList.toggle("hidden", esAdmin);
+  $("panel").classList.toggle("hidden", !esAdmin);
+  if (user && !esAdmin) {
+    await signOut(auth);
+    estado("Esta cuenta no tiene permisos de administrador.");
+  }
+  if (esAdmin) {
+    $("sesion").textContent = "Sesión iniciada como administrador.";
+    await cargarProductos();
+  }
+});
+
+async function cargarProductos() {
+  $("productos").replaceChildren();
+  try {
+    const snap = await getDocs(query(collection(db, "productos"), orderBy("nombre")));
+    snap.forEach(item => {
+      const p = item.data();
+      const fila = document.createElement("section");
+      const titulo = document.createElement("strong");
+      titulo.textContent = p.nombre || "(Sin nombre)";
+      const detalle = document.createElement("p");
+      detalle.textContent = `ARS ${p.precio ?? 0} · ${p.activo ? "Publicado" : "Oculto"}`;
+      const boton = document.createElement("button");
+      boton.textContent = p.activo ? "Ocultar producto" : "Publicar producto";
+      boton.addEventListener("click", async () => {
+        try {
+          await updateDoc(doc(db, "productos", item.id), { activo: !p.activo });
+          estado("Estado del producto actualizado.");
+          await cargarProductos();
+        } catch (e) {
+          estado("No se pudo actualizar el producto. Revisá las reglas de Firestore.");
+        }
+      });
+      fila.append(titulo, detalle, boton);
+      $("productos").append(fila);
+    });
+  } catch (e) {
+    estado("No se pudieron cargar los productos. Revisá las reglas y los campos.");
+  }
+}
+
+$("formProducto").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!auth.currentUser || auth.currentUser.uid !== ADMIN_UID) {
+    estado("No tenés permisos para guardar productos.");
+    return;
+  }
+  const precio = Number($("precio").value);
+  if (!Number.isFinite(precio) || precio < 0) {
+    estado("Ingresá un precio válido.");
+    return;
+  }
+  try {
+    await addDoc(collection(db, "productos"), {
+      nombre: $("nombre").value.trim(),
+      categoria: $("categoria").value,
+      descripcion: $("descripcion").value.trim(),
+      precio,
+      imagenUrl: $("imagenUrl").value.trim(),
+      activo: $("activo").value === "true",
+      creadoEn: new Date().toISOString()
+    });
+    $("formProducto").reset();
+    estado("Producto guardado correctamente.");
+    await cargarProductos();
+  } catch (e) {
+    estado("No se pudo guardar. Comprobá las reglas de Firestore y tu conexión.");
+  }
+});
+</script>
+</body>
+</html>
