@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -22,13 +21,15 @@ button,.boton{border:0;padding:12px 16px;background:#d8b65c;color:#111;font-weig
 button:active{opacity:.8}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
 .producto{border:1px solid #393020;padding:18px;border-radius:5px;background:#111}
-.foto{height:145px;background:linear-gradient(135deg,#29251c,#080808);display:flex;align-items:center;justify-content:center;color:#d8b65c;font:22px Georgia,serif}
+.foto{height:180px;background:linear-gradient(135deg,#29251c,#080808);display:flex;align-items:center;justify-content:center;color:#d8b65c;font:22px Georgia,serif;overflow:hidden}
+.foto img{width:100%;height:100%;object-fit:cover}
 .producto p{color:#c8c1b3}
 .precio{font-size:20px;color:#d8b65c;font-weight:bold}
 #carrito{border:1px solid #b99748;padding:18px;margin-top:20px}
 .item{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #393020}
 footer{text-align:center;padding:24px;color:#b7ad99;border-top:1px solid #393020;font-size:13px}
 small{color:#b7ad99}
+#estadoTienda{color:#d8b65c}
 </style>
 </head>
 <body>
@@ -40,7 +41,6 @@ small{color:#b7ad99}
     <a href="#carrito">Carrito (<span id="cantidad">0</span>)</a>
   </nav>
 </header>
-
 <main>
   <div class="hero" id="inicio">
     <p>JOYAS · RELOJES · DISTINCIÓN</p>
@@ -48,12 +48,11 @@ small{color:#b7ad99}
     <p>Elegancia para cada momento.</p>
     <a class="boton" href="#tienda">VER COLECCIÓN</a>
   </div>
-
   <section id="tienda">
     <h2>Nuestra colección</h2>
-    <p><small>Productos y precios de demostración. Se podrán modificar desde el administrador cuando lo conectemos.</small></p>
+    <p><small>Descubrí nuestra selección de joyas y relojes.</small></p>
+    <p id="estadoTienda">Cargando colección...</p>
     <div class="grid" id="productos"></div>
-
     <div id="carrito">
       <h2>Tu carrito</h2>
       <div id="items"><p>Tu carrito está vacío.</p></div>
@@ -62,84 +61,198 @@ small{color:#b7ad99}
       <p><small>Los pagos online todavía no están activados.</small></p>
     </div>
   </section>
-
   <section id="contacto">
     <h2>Contacto</h2>
     <p>Prestige Gold · Consultá por nuestros productos.</p>
   </section>
 </main>
-
 <footer>PRESTIGE GOLD · Elegancia sin tiempo</footer>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+import {
+  getFirestore, collection, getDocs, query, where
+} from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
-<script>
-const productos = [
-  {id:1,nombre:"Reloj Elegance",categoria:"Relojes",precio:85000},
-  {id:2,nombre:"Reloj Prestige",categoria:"Relojes",precio:120000},
-  {id:3,nombre:"Collar Dorado",categoria:"Joyas",precio:35000},
-  {id:4,nombre:"Pulsera Clásica",categoria:"Joyas",precio:22000}
-];
+const firebaseConfig = {
+  apiKey: "AIzaSyANbbIDDDXYYtehsDKbsYN7Miekc-trEvk",
+  authDomain: "prestigegold-d5b18.firebaseapp.com",
+  projectId: "prestigegold-d5b18",
+  storageBucket: "prestigegold-d5b18.firebasestorage.app",
+  messagingSenderId: "483528037712",
+  appId: "1:483528037712:web:c402d74fae70e7517f8855"
+};
 
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const $ = id => document.getElementById(id);
+let productos = [];
 let carrito = [];
 
-function pesos(valor){
-  return new Intl.NumberFormat("es-AR",{
-    style:"currency",currency:"ARS",maximumFractionDigits:0
+function pesos(valor) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency", currency: "ARS", maximumFractionDigits: 0
   }).format(valor);
 }
 
-function mostrarProductos(){
-  document.getElementById("productos").innerHTML = productos.map(p=>`
-    <article class="producto">
-      <div class="foto">${p.categoria}</div>
-      <h3>${p.nombre}</h3>
-      <p>${p.categoria}</p>
-      <div class="precio">${pesos(p.precio)}</div>
-      <button onclick="agregar(${p.id})">Agregar al carrito</button>
-    </article>
-  `).join("");
+function textoSeguro(valor) {
+  return String(valor ?? "");
 }
 
-function agregar(id){
-  const producto = productos.find(p=>p.id===id);
-  const item = carrito.find(p=>p.id===id);
-  if(item){item.cantidad++}
-  else{carrito.push({...producto,cantidad:1})}
-  mostrarCarrito();
-}
+function mostrarProductos() {
+  const contenedor = $("productos");
+  contenedor.replaceChildren();
 
-function quitar(id){
-  carrito=carrito.filter(p=>p.id!==id);
-  mostrarCarrito();
-}
-
-function mostrarCarrito(){
-  const items=document.getElementById("items");
-  document.getElementById("cantidad").textContent=
-    carrito.reduce((s,p)=>s+p.cantidad,0);
-  if(!carrito.length){
-    items.innerHTML="<p>Tu carrito está vacío.</p>";
-  }else{
-    items.innerHTML=carrito.map(p=>`
-      <div class="item">
-        <span>${p.nombre} × ${p.cantidad}<br>${pesos(p.precio*p.cantidad)}</span>
-        <button onclick="quitar(${p.id})">Quitar</button>
-      </div>
-    `).join("");
+  if (!productos.length) {
+    $("estadoTienda").textContent = "Pronto tendremos productos disponibles.";
+    return;
   }
-  document.getElementById("total").textContent=
-    pesos(carrito.reduce((s,p)=>s+p.precio*p.cantidad,0));
+
+  $("estadoTienda").textContent = "";
+
+  productos.forEach(p => {
+    const tarjeta = document.createElement("article");
+    tarjeta.className = "producto";
+
+    const foto = document.createElement("div");
+    foto.className = "foto";
+
+    if (p.imagenUrl) {
+      try {
+        const url = new URL(p.imagenUrl);
+        if (url.protocol === "https:") {
+          const img = document.createElement("img");
+          img.src = url.href;
+          img.alt = textoSeguro(p.nombre);
+          img.loading = "lazy";
+          img.onerror = () => {
+            foto.replaceChildren();
+            foto.textContent = textoSeguro(p.categoria);
+          };
+          foto.append(img);
+        } else {
+          foto.textContent = textoSeguro(p.categoria);
+        }
+      } catch {
+        foto.textContent = textoSeguro(p.categoria);
+      }
+    } else {
+      foto.textContent = textoSeguro(p.categoria);
+    }
+
+    const nombre = document.createElement("h3");
+    nombre.textContent = textoSeguro(p.nombre);
+
+    const categoria = document.createElement("p");
+    categoria.textContent = textoSeguro(p.categoria);
+
+    const descripcion = document.createElement("p");
+    descripcion.textContent = textoSeguro(p.descripcion);
+
+    const precio = document.createElement("div");
+    precio.className = "precio";
+    precio.textContent = pesos(p.precio);
+
+    const boton = document.createElement("button");
+    boton.textContent = "Agregar al carrito";
+    boton.addEventListener("click", () => agregar(p.id));
+
+    tarjeta.append(foto, nombre, categoria);
+    if (p.descripcion) tarjeta.append(descripcion);
+    tarjeta.append(precio, boton);
+    contenedor.append(tarjeta);
+  });
 }
 
-function iniciarPago(){
-  if(!carrito.length){
+async function cargarProductos() {
+  $("estadoTienda").textContent = "Cargando colección...";
+  try {
+    const consulta = query(
+      collection(db, "productos"),
+      where("activo", "==", true)
+    );
+    const resultado = await getDocs(consulta);
+
+    productos = resultado.docs.map(documento => ({
+      id: documento.id,
+      ...documento.data()
+    })).filter(p =>
+      typeof p.nombre === "string" &&
+      typeof p.precio === "number" &&
+      Number.isFinite(p.precio) &&
+      p.precio >= 0
+    );
+
+    mostrarProductos();
+  } catch (error) {
+    console.error("Error al cargar productos:", error);
+    $("estadoTienda").textContent =
+      "No pudimos cargar la colección. Intentá actualizar la página.";
+  }
+}
+
+function agregar(id) {
+  const producto = productos.find(p => p.id === id);
+  if (!producto) return;
+
+  const item = carrito.find(p => p.id === id);
+  if (item) item.cantidad++;
+  else carrito.push({...producto, cantidad: 1});
+
+  mostrarCarrito();
+}
+
+function quitar(id) {
+  carrito = carrito.filter(p => p.id !== id);
+  mostrarCarrito();
+}
+
+function mostrarCarrito() {
+  $("cantidad").textContent =
+    carrito.reduce((s, p) => s + p.cantidad, 0);
+
+  const items = $("items");
+  items.replaceChildren();
+
+  if (!carrito.length) {
+    const mensaje = document.createElement("p");
+    mensaje.textContent = "Tu carrito está vacío.";
+    items.append(mensaje);
+  } else {
+    carrito.forEach(p => {
+      const fila = document.createElement("div");
+      fila.className = "item";
+
+      const detalle = document.createElement("span");
+      detalle.textContent =
+        `${p.nombre} × ${p.cantidad} — ${pesos(p.precio * p.cantidad)}`;
+
+      const boton = document.createElement("button");
+      boton.textContent = "Quitar";
+      boton.addEventListener("click", () => quitar(p.id));
+
+      fila.append(detalle, boton);
+      items.append(fila);
+    });
+  }
+
+  $("total").textContent =
+    pesos(carrito.reduce((s, p) => s + p.precio * p.cantidad, 0));
+}
+
+function iniciarPago() {
+  if (!carrito.length) {
     alert("Agregá un producto al carrito primero.");
     return;
   }
   alert("El carrito funciona. Estamos preparando la conexión segura con Mercado Pago. Todavía no se realizará ningún cobro.");
 }
 
-mostrarProductos();
+window.iniciarPago = iniciarPago;
+
 mostrarCarrito();
+cargarProductos();
 </script>
 </body>
 </html>
+
+
